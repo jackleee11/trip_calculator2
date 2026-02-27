@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能行程报价系统 (最新 Key)</title>
+    
+    <!-- ⚠️ 已更新：填入新的安全密钥 -->
+    <script type="text/javascript">
+        window._AMapSecurityConfig = {
+            securityJsCode: 'c3235363f6d5dc49431445521944a034'
+        };
+    </script>
+    
+    <!-- ⚠️ 已更新：填入新的 Key -->
+    <script src="https://webapi.amap.com/maps?v=2.0&key=f427a2a46cac0a939611d03b8861b106&plugin=AMap.Driving,AMap.Scale,AMap.ToolBar"></script>
+    
+    <style>
+        :root { --primary: #2563eb; --bg: #f3f4f6; --card: #ffffff; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
+        
+        .sidebar { width: 400px; background: var(--card); padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.1); overflow-y: auto; display: flex; flex-direction: column; gap: 15px; z-index: 10; }
+        h2 { margin: 0 0 10px 0; color: #1f2937; font-size: 1.2rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+        h3 { margin: 15px 0 8px 0; color: #4b5563; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+        
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        label { font-size: 0.85rem; color: #6b7280; font-weight: 500; }
+        
+        textarea#smartInput {
+            width: 100%; height: 80px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;
+            font-size: 0.95rem; resize: vertical; font-family: inherit; box-sizing: border-box;
+        }
+        textarea#smartInput:focus { outline: none; border-color: var(--primary); }
+        
+        .btn-parse { background: #8b5cf6; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-weight: 500; }
+        .btn-parse:hover { background: #7c3aed; }
+        
+        input { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; }
+        input:focus { outline: none; border-color: var(--primary); }
+        
+        .waypoint-list { display: flex; flex-direction: column; gap: 8px; max-height: 150px; overflow-y: auto; border: 1px solid #e5e7eb; padding: 10px; border-radius: 6px; background: #f9fafb; }
+        .waypoint-item { display: flex; gap: 5px; }
+        .waypoint-item input { flex: 1; }
+        .btn-remove { background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 0 10px; font-weight: bold; }
+        
+        .btn-add { background: #10b981; color: white; border: none; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; margin-top: 5px; }
+        
+        .btn-calc { 
+            background: var(--primary); color: white; border: none; padding: 14px; border-radius: 6px; 
+            cursor: pointer; font-weight: bold; font-size: 1rem; margin-top: 15px; 
+            box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); transition: all 0.2s;
+        }
+        .btn-calc:hover { background: #1d4ed8; transform: translateY(-1px); }
+        .btn-calc:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+
+        .main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
+        #container { width: 100%; height: 55%; background: #e5e7eb; }
+        
+        .result-panel { 
+            height: 45%; background: var(--card); padding: 20px; border-top: 1px solid #e5e7eb; 
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; 
+            opacity: 0.5; pointer-events: none; transition: opacity 0.3s;
+        }
+        .result-panel.active { opacity: 1; pointer-events: auto; }
+        
+        .stat-card { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; justify-content: center; }
+        .stat-label { font-size: 0.8rem; color: #64748b; margin-bottom: 8px; font-weight: 600; }
+        .stat-value { font-size: 1.4rem; font-weight: 800; color: #0f172a; }
+        .stat-unit { font-size: 0.8rem; color: #64748b; font-weight: normal; margin-left: 2px; }
+        .total-price { color: #dc2626; font-size: 1.6rem; }
+        
+        #statusMsg { 
+            padding: 10px; border-radius: 6px; font-size: 0.9rem; margin-top: 10px; 
+            display: none; text-align: center; font-weight: 500; white-space: pre-wrap;
+        }
+        .status-loading { background: #eff6ff; color: #2563eb; display: block !important; }
+        .status-error { background: #fef2f2; color: #dc2626; display: block !important; }
+        .status-success { background: #ecfdf5; color: #059669; display: block !important; }
+
+        @media (max-width: 768px) {
+            body { flex-direction: column; overflow: auto; height: auto; }
+            .sidebar { width: 100%; height: auto; box-sizing: border-box; }
+            #container { height: 400px; }
+            .result-panel { grid-template-columns: 1fr 1fr; height: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>🚛 智能行程报价系统</h2>
+        
+        <h3>1. 行程识别</h3>
+        <div class="input-group">
+            <label>输入行程描述</label>
+            <textarea id="smartInput" placeholder="例：从北京朝阳区政府出发，途经济南，到达上海浦东机场"></textarea>
+            <button class="btn-parse" onclick="parseSmartText()">✨ 自动提取地点</button>
+        </div>
+
+        <div style="border-top: 1px dashed #e5e7eb; margin: 10px 0;"></div>
+
+        <h3>2. 路线确认</h3>
+        <div class="input-group">
+            <label>起点</label>
+            <input type="text" id="startPoint" placeholder="待识别">
+        </div>
+        <div class="input-group">
+            <label>终点</label>
+            <input type="text" id="endPoint" placeholder="待识别">
+        </div>
+        <label style="margin-top:10px; font-size:0.85rem; color:#6b7280;">途经点</label>
+        <div class="waypoint-list" id="waypointList"></div>
+        <button class="btn-add" onclick="addWaypoint()">+ 添加途经点</button>
+
+        <button class="btn-calc" id="calcBtn" onclick="calculateRouteAndPrice()">🗺️ 生成轨迹并计算报价</button>
+        
+        <div id="statusMsg"></div>
+        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 5px; text-align: center;">
+            💡 如一直加载，请按 F12 查看 Console 错误
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div id="container"></div>
+        <div class="result-panel" id="resultPanel">
+            <div class="stat-card">
+                <div class="stat-label">📏 规划总里程</div>
+                <div class="stat-value" id="resDistance">0<span class="stat-unit">km</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">⛽ 燃油成本</div>
+                <div class="stat-value" id="resFuelCost">0<span class="stat-unit">元</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">👷 人工及杂费</div>
+                <div class="stat-value" id="resLaborCost">0<span class="stat-unit">元</span></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">💰 最终总报价</div>
+                <div class="stat-value total-price" id="resTotalPrice">0<span class="stat-unit">元</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let driving;
+        let routeLine;
+        let planningTimer = null;
+
+        function initMap() {
+            console.log("🗺️ 初始化地图，Key: f427a2a46cac0a939611d03b8861b106");
+            map = new AMap.Map('container', {
+                zoom: 11,
+                center: [116.397428, 39.90923],
+                viewMode: '3D'
+            });
+            map.addControl(new AMap.Scale());
+            map.addControl(new AMap.ToolBar());
+
+            driving = new AMap.Driving({
+                map: map,
+                panel: null, 
+                policy: AMap.DrivingPolicy.LEAST_TIME
+            });
+
+            AMap.event.addListener(driving, 'complete', function(data){
+                clearTimeout(planningTimer);
+                console.log("✅ 路线规划成功:", data);
+                if(data.routes && data.routes.length > 0) {
+                    const distanceKm = data.routes[0].distance / 1000;
+                    map.setFitView();
+                    showStatus(`✅ 轨迹生成成功！总里程：${distanceKm.toFixed(1)} km`, 'success');
+                    calculatePriceBasedOnDistance(distanceKm);
+                    document.getElementById('resultPanel').classList.add('active');
+                    document.getElementById('calcBtn').disabled = false;
+                    document.getElementById('calcBtn').innerText = "🔄 重新规划计算";
+                } else {
+                    handleCalcError("未找到合适的路线，请检查地点名称。");
+                }
+            });
+            
+            AMap.event.addListener(driving, 'error', function(e){
+                clearTimeout(planningTimer);
+                console.error("❌ 高德 API 错误详情:", e);
+                let msg = "路线规划失败";
+                if(e.message) msg += ": " + e.message;
+                if(e.info) msg += " (" + e.info + ")";
+                
+                // 针对性提示
+                if(e.message && e.message.includes("INVALID_USER_KEY")) {
+                    msg += "\n👉 Key 无效，请检查代码中的 Key 是否与后台一致。";
+                } else if (e.message && e.message.includes("PERMISSION_DENIED")) {
+                    msg += "\n👉 权限拒绝，请检查高德后台白名单是否设为 '*'。";
+                } else if (e.message && e.message.includes("security")) {
+                    msg += "\n👉 安全密钥不匹配，请检查代码中的 securityJsCode。";
+                }
+                
+                handleCalcError(msg);
+            });
+        }
+
+        function parseSmartText() {
+            const text = document.getElementById('smartInput').value.trim();
+            if (!text) { showStatus("⚠️ 请输入行程描述", 'error'); return; }
+            
+            showStatus("⏳ 正在识别地点...", 'loading');
+            
+            let processedText = text.replace(/(从|自|由|出发地|起点)[:：]?/g, "##START##")
+                                    .replace(/(到|至|去|目的地|终点|到达)[:：]?/g, "##END##")
+                                    .replace(/(途经|经过|路过|停靠|中间去)[:：]?/g, "##WAY##");
+
+            let start = "", end = "", waypoints = [];
+            const markers = processedText.match(/##START##|##END##|##WAY##/g) || [];
+
+            if (markers.length === 0) {
+                const parts = text.split(/[,,，,;\s]+/).filter(p => p.trim() !== "");
+                if (parts.length >= 2) {
+                    start = parts[0]; end = parts[parts.length-1];
+                    if(parts.length > 2) waypoints = parts.slice(1, parts.length-1);
+                }
+            } else {
+                const sMatch = processedText.match(/##START##([^#]+)/);
+                if(sMatch) start = sMatch[1].split(/##/)[0].trim();
+                const eMatch = processedText.match(/##END##([^#]+)/);
+                if(eMatch) end = eMatch[1].split(/##/)[0].trim();
+                const wMatches = processedText.matchAll(/##WAY##([^#]+)/g);
+                for(const m of wMatches) if(m[1].split(/##/)[0].trim()) waypoints.push(m[1].split(/##/)[0].trim());
+                if(!start && processedText.indexOf('##')!==0) start = processedText.split('##')[0].trim();
+            }
+
+            if(start) document.getElementById('startPoint').value = start;
+            if(end) document.getElementById('endPoint').value = end;
+            
+            const list = document.getElementById('waypointList');
+            list.innerHTML = '';
+            waypoints.forEach(wp => {
+                const div = document.createElement('div');
+                div.className = 'waypoint-item';
+                div.innerHTML = `<input type="text" class="waypoint-input" value="${wp}"><button class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
+                list.appendChild(div);
+            });
+
+            if(start && end) {
+                showStatus(`✅ 识别成功：${start} → ${end}`, 'success');
+            } else {
+                showStatus("⚠️ 识别不完整，请手动补充", 'error');
+            }
+        }
+
+        function addWaypoint() {
+            const list = document.getElementById('waypointList');
+            const div = document.createElement('div');
+            div.className = 'waypoint-item';
+            div.innerHTML = `<input type="text" class="waypoint-input" placeholder="途经点"><button class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
+            list.appendChild(div);
+        }
+
+        function calculateRouteAndPrice() {
+            const start = document.getElementById('startPoint').value.trim();
+            const end = document.getElementById('endPoint').value.trim();
+            
+            if(!start || !end) {
+                showStatus("⚠️ 请先填写起点和终点", 'error');
+                return;
+            }
+
+            const btn = document.getElementById('calcBtn');
+            btn.disabled = true;
+            btn.innerText = "⏳ 正在规划路线...";
+            document.getElementById('resultPanel').classList.remove('active');
+            showStatus("🗺️ 正在连接高德地图计算真实里程...", 'loading');
+            
+            if(routeLine) map.remove(routeLine);
+            clearTimeout(planningTimer);
+
+            planningTimer = setTimeout(() => {
+                handleCalcError("⏰ 请求超时 (15s)\n可能原因：\n1. 高德后台白名单未设为 '*'\n2. 新 Key 配置尚未生效 (请等待 10 分钟)\n3. 网络拦截");
+            }, 15000);
+
+            const waypoints = [];
+            document.querySelectorAll('.waypoint-input').forEach(input => {
+                if(input.value.trim()) waypoints.push(input.value.trim());
+            });
+
+            try {
+                console.log("🚀 发起搜索请求...", { start, end, waypoints });
+                driving.search(start, end, {
+                    waypoints: waypoints.length > 0 ? waypoints : null
+                });
+            } catch (e) {
+                clearTimeout(planningTimer);
+                handleCalcError("调用失败: " + e.message);
+            }
+        }
+
+        function calculatePriceBasedOnDistance(distanceKm) {
+            const fuelConsPer100km = parseFloat(document.getElementById('fuelConsumption').value) || 0;
+            const fuelPrice = parseFloat(document.getElementById('fuelPrice').value) || 0;
+            const salary = parseFloat(document.getElementById('driverSalary').value) || 0;
+            const profitPerKm = parseFloat(document.getElementById('profitPerKm').value) || 0;
+            const days = parseFloat(document.getElementById('days').value) || 1;
+            const fixedCost = parseFloat(document.getElementById('fixedCost').value) || 0;
+
+            const totalFuelCost = (distanceKm / 100) * fuelConsPer100km * fuelPrice;
+            const totalLaborCost = (salary * days) + fixedCost;
+            const totalProfit = distanceKm * profitPerKm;
+            const totalPrice = totalFuelCost + totalLaborCost + totalProfit;
+
+            document.getElementById('resDistance').innerHTML = `${distanceKm.toFixed(1)}<span class="stat-unit"> km</span>`;
+            document.getElementById('resFuelCost').innerHTML = `${totalFuelCost.toFixed(2)}<span class="stat-unit"> 元</span>`;
+            document.getElementById('resLaborCost').innerHTML = `${totalLaborCost.toFixed(2)}<span class="stat-unit"> 元</span>`;
+            document.getElementById('resTotalPrice').innerHTML = `${totalPrice.toFixed(2)}<span class="stat-unit"> 元</span>`;
+        }
+
+        function handleCalcError(msg) {
+            showStatus("❌ " + msg, 'error');
+            const btn = document.getElementById('calcBtn');
+            btn.disabled = false;
+            btn.innerText = "🗺️ 重试生成轨迹";
+            document.getElementById('resultPanel').classList.remove('active');
+        }
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('statusMsg');
+            el.className = ''; 
+            el.classList.add(`status-${type}`);
+            el.innerText = msg;
+        }
+
+        window.onload = initMap;
+    </script>
+</body>
+</html>
